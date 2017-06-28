@@ -1,0 +1,106 @@
+// Use the Alexa SDK
+var Alexa = require('alexa-sdk');
+
+// Register and execute handlers
+exports.handler = function(event, context, callback){
+    var alexa = Alexa.handler(event, context, callback);
+	alexa.registerHandlers(handlers);
+	alexa.execute();
+	
+	// Create a database that will be used as a logbook
+	//alexa.dynamoDBTableName = 'REANLogBook';
+};
+
+// Store the messages used for in the lambda function
+var skillMessages = {
+	'welcome'       :'<emphasis sound='moderate'> 'Welcome to RAIN Cloud. Are you a staff member, visitor or delivery personnel?' </emphasis>',
+    'staff' 		:'<emphasis sound='moderate'> 'Thank you. HR personnel will open the door very shortly.' </emphasis>',
+	'visitor'  		:'<emphasis sound='moderate'> 'Standby. HR personnel will open the door shortly.' </emphasis>',
+    'delivery'      :'<emphasis sound='moderate'> 'Do you need someone to sign-off?' </emphasis>',
+    'nowOutput'     :'<emphasis sound='moderate'> 'Standby. HR Personnel will be at the front shortly.' </emphasis>',
+    'laterOutput'   :'<emphasis sound='moderate'> 'Thank you. Please leave the package here and someone will pick it up later.' </emphasis>',
+	'help'			:'<emphasis sound='moderate'> 'You can say staff, visitor, or delivery personnel?' </emphasis>' 
+};
+
+}
+/* Different messages that Alexa will convey to the guest
+var welcomeOutput = <emphasis sound='moderate'> 'Welcome to RAIN Cloud. Are you a staff member, visitor or delivery personnel?' </emphasis>;
+var staffOutput = <emphasis sound='moderate'> 'Thank you. HR personnel will open the door very shortly.' </emphasis>;
+var visitorOutput = <emphasis sound='moderate'> 'Standby. HR personnel will open the door shortly.' </emphasis>;
+var deliveryOutput = <emphasis sound='moderate'> 'Do you need someone to sign-off?' </emphasis>;
+var nowOutput = <emphasis sound='moderate'> "Standby. HR Personnel will be at the front shortly." </emphasis>;
+var laterOutput = <emphasis sound='moderate'> "Thank you. Please leave the package here and someone will pick it up later." </emphasis>;
+var HELP_MESSAGE = <emphasis sound='moderate'> "You can say staff, visitor, or delivery personnel?" </emphasis>;
+*/
+
+// Handler function(s)	
+var handlers = {
+	
+	// Launch request will be used when user invokes command
+	'LaunchRequest': function () {
+		this.emit('OpenDoorIntent');
+	},
+	
+	// OpenDoor intent 
+    'OpenDoorIntent': function () {
+
+	// Welcome message
+	this.emit(':ask', skillMessages.welcome);
+	
+	// When guest intitiates dialogue, Alexa will ask who the person is
+	// var intentObj = this.event.request.intent;
+    
+	// Assign a varaiable for the visitor type	
+	var myGuest = this.event.request.intent.slots.city.value;
+
+	// If guest is a staff
+	if (myGuest === "Staff") {
+          this.emit(':tell', skillMessages.staff); 
+	} 
+			
+	// If guest is a visitor
+	else if (myGuest === "Visitor") {
+           this.emit(':tell', skillMessages.visitor);
+	} 
+	
+	// If guest is a staff
+	else if (myGuest === "Delivery personnel") {
+		this.emit(':ask', skillMessages.deliveryOutput);
+	
+			// Assign a variable to the user's delivery response
+			var myDecision = this.event.request.intent.slots;
+			
+			// Use conditionals to figure out course of action
+			if (myDecision === "Yes") {
+				this.emit(':tell', skillMessages.nowOutput)
+				
+			}
+			else if (myDecision === "No") {
+				this.emit(':tell', skillMessages.laterOutput)
+			}
+	
+	// If none of the above conditials work
+	else {
+		
+	}	
+	}
+	}, 
+	
+	// Use built-in amazon intents to assist with the program
+	'AMAZON.HelpIntent': function () {
+        this.emit(':tell', 'Goodbye.');
+    },
+
+	'AMAZON.StartOverIntent': function () {
+		this.emit(':tell', 'Goodbye.');
+	},
+	
+	'AMAZON.YesIntent': function() {
+		this.emit(':tell', OpenDoor);
+	},
+	
+	'AMAZON.NoInent': function() {
+		this.emit(':tell', OpenDoor);
+	}
+}
+};
