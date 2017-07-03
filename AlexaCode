@@ -1,18 +1,14 @@
-// Use the Alexa SDK
-var Alexa = require('alexa-sdk');
+// 1. Text strings =====================================================================================================
+//    Modify these strings and messages to change the behavior of your Lambda function
 
-// Register and execute handlers
-exports.handler = function(event, context, callback){
-    var alexa = Alexa.handler(event, context, callback);
-	alexa.registerHandlers(handlers);
-	alexa.execute();
-	
-	// Create a database that will be used as a logbook
-	//alexa.dynamoDBTableName = 'REANLogBook';
-};
+// Use the Alexa SDK
+const Alexa = require('alexa-sdk');
+
+// Add a new SNS notification
+var sns = new AWS.SNS();
 
 // Store the messages used for in the lambda function
-var skillMessages = {
+const skillMessages = {
 	'welcome'       :'<emphasis sound='moderate'> 'Welcome to RAIN Cloud. Are you a staff member, visitor or delivery personnel?' </emphasis>',
     'staff' 		:'<emphasis sound='moderate'> 'Thank you. HR personnel will open the door very shortly.' </emphasis>',
 	'visitor'  		:'<emphasis sound='moderate'> 'Standby. HR personnel will open the door shortly.' </emphasis>',
@@ -22,67 +18,97 @@ var skillMessages = {
 	'help'			:'<emphasis sound='moderate'> 'You can say staff, visitor, or delivery personnel?' </emphasis>' 
 };
 
-}
-/* Different messages that Alexa will convey to the guest
-var welcomeOutput = <emphasis sound='moderate'> 'Welcome to RAIN Cloud. Are you a staff member, visitor or delivery personnel?' </emphasis>;
-var staffOutput = <emphasis sound='moderate'> 'Thank you. HR personnel will open the door very shortly.' </emphasis>;
-var visitorOutput = <emphasis sound='moderate'> 'Standby. HR personnel will open the door shortly.' </emphasis>;
-var deliveryOutput = <emphasis sound='moderate'> 'Do you need someone to sign-off?' </emphasis>;
-var nowOutput = <emphasis sound='moderate'> "Standby. HR Personnel will be at the front shortly." </emphasis>;
-var laterOutput = <emphasis sound='moderate'> "Thank you. Please leave the package here and someone will pick it up later." </emphasis>;
-var HELP_MESSAGE = <emphasis sound='moderate'> "You can say staff, visitor, or delivery personnel?" </emphasis>;
-*/
+/* Add the phone number that wll be used for this project
+const mobileNumber = '+13012213614';
+
+Declare a variable that will be used to assign to messages 
+var bodyText = " "
+
+Store that parameters need for the SNS
+/const params = {
+    PhoneNumber: mobileNumber,
+    Message: bodyText
+};
+
+// 2. Skill Code =======================================================================================================
+
+// Register and execute handlers
+exports.handler = function(event, context, callback){
+    var alexa = Alexa.handler(event, context, callback);
+	alexa.registerHandlers(handlers);
+	alexa.execute();
+	
+	// Create a database that will be used as a logbook
+	//alexa.dynamoDBTableName = 'REANLogBook';
+}; */
 
 // Handler function(s)	
-var handlers = {
+const handlers = {
 	
 	// Launch request will be used when user invokes command
 	'LaunchRequest': function () {
-		this.emit('OpenDoorIntent');
+		this.emit(':ask', skillMessages.welcome, skillMessages.help);
 	},
 	
 	// OpenDoor intent 
     'OpenDoorIntent': function () {
 
-	// Welcome message
-	this.emit(':ask', skillMessages.welcome);
-	
-	// When guest intitiates dialogue, Alexa will ask who the person is
-	// var intentObj = this.event.request.intent;
-    
-	// Assign a varaiable for the visitor type	
-	var myGuest = this.event.request.intent.slots.city.value;
+		// Assign a varaiable for the visitor type	
+		var myGuest = this.event.request.intent.slots.city.value;
 
-	// If guest is a staff
-	if (myGuest === "Staff") {
-          this.emit(':tell', skillMessages.staff); 
-	} 
-			
-	// If guest is a visitor
-	else if (myGuest === "Visitor") {
-           this.emit(':tell', skillMessages.visitor);
-	} 
+		// If guest is a staff	
+		if (myGuest === "Staff") {
+			this.emit(':tell', skillMessages.staff); 
+			sns.publish({
+				Message: 'Test publish to SNS from Lambda',
+				TopicArn: 'TOPIC_ARN'
+			}, function(err, data) {
+					if (err) {
+						console.log(err.stack);
+						return;
+					}		
+			console.log('push sent');
+			console.log(data);
+			context.done(null, 'Function Finished!');  
+			});
+							
+		// If guest is a visitor
+		else if (myGuest === "Visitor") {
+			this.emit(':tell', skillMessages.visitor);
+			bodyText = 'Hey Jessica. There's a visitor waiting at the front.';
+			sns.publish(publishParams, function(err, data) {
+				process.stdout.write(".");
+				//console.log(data);
+		   }
+		} 
 	
-	// If guest is a staff
-	else if (myGuest === "Delivery personnel") {
-		this.emit(':ask', skillMessages.deliveryOutput);
-	
-			// Assign a variable to the user's delivery response
+		// If guest is a staff
+		else if (myGuest === "Delivery personnel") {
+			this.emit(':ask', skillMessages.deliveryOutput);
+		
+			// Assign a variable t2o the user's delivery response
 			var myDecision = this.event.request.intent.slots;
 			
 			// Use conditionals to figure out course of action
 			if (myDecision === "Yes") {
 				this.emit(':tell', skillMessages.nowOutput)
-				
+				bodyText = 'Hey Jessica, there is a delivery personnel waiting at the front to get a package signed.';
+				sns.publish(publishParams, function(err, data) {
+					process.stdout.write(".");
+					//console.log(data);
+				}
 			}
 			else if (myDecision === "No") {
 				this.emit(':tell', skillMessages.laterOutput)
-			}
+				bodyText = 'Jessica, there is a package waiting to be picked up at a conveniant time.';
+				sendTxtMessage
+			}			
+		}
 	
-	// If none of the above conditials work
-	else {
+		// If none of the above conditials work
+		else {
 		
-	}	
+		}	
 	}
 	}, 
 	
@@ -102,5 +128,41 @@ var handlers = {
 	'AMAZON.NoInent': function() {
 		this.emit(':tell', OpenDoor);
 	}
-}
 };
+
+};
+
+//    END of Intent Handlers {} ========================================================================================
+// 3. Helper Function  =================================================================================================
+
+/* A function to send a text message
+function sendTxtMessage(params, callback) {
+
+    var AWS = require('aws-sdk');
+    AWS.config.update({region: AWSregion});
+
+    var SNS = new AWS.SNS();
+
+    SNS.publish(params, function(err, data){
+
+        console.log('sending message to ' + params.PhoneNumber.toString() );
+
+        if (err) console.log(err, err.stack);
+
+        callback('text message sent');
+
+    });*/
+	
+	function publish(mesg) {
+
+		var publishParams = { 
+			TopicArn : config.TopicArn,
+			Message: mesg
+		};
+		    sns.publish(publishParams, function(err, data) {
+				process.stdout.write(".");
+				//console.log(data);
+			
+			});
+	};
+};	
