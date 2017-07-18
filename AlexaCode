@@ -1,57 +1,170 @@
+// 1. Text strings =====================================================================================================
+//    Modify these strings and messages to change the behavior of your Lambda function
+'use strict';
 
-// A function to send sms 
-function sendSMS(to_number, message, func_callback) {
+// Use the Alexa SDK
+var Alexa = require('alexa-sdk');
+var APP_ID = undefined;// amzn1.ask.skill.7c6937d8-b29a-428b-9eb5-f1085ff32b91;
+var SKILL_NAME = "REAN Cloud";
+	
+// A variable to hold the text message
+var bodyText = '';
 
-    
-    AWS.config.update({
-        accessKeyId: Config.amazon_sns.accessKeyId,
-        secretAccessKey: Config.amazon_sns.secretAccessKey,
-        region: Config.amazon_sns.region
-    });
+// Messages used for the OpenDoorIntent
+var welcomeMsg = 'Welcome to RAIN Cloud. Are you an employee, visitor, delivery personnel, or here for an interview?';
+var visitorMsg = 'Standby. HR personnel will open the door shortly. Thanks.'
+var deliveryMsg = 'Do you need someone to sign-off?';
+var laterMsg = 'Thank you. Please leave the item here and someone will pick it up later.';
+var helpMsg = 'You can say staff, visitor, or delivery personnel?'; 
+var goodbyeMsg = 'Thank you for visiting RAIN. Have a good day!';
 
-    var sns = new AWS.SNS();
+// Messages that will be sent to Jessica
+var staffText = 'Jessica, a REAN employee is waiting for the door to be opened.';
+var interviewText = 'Jessica, a person is waiting outside the door for their interview';
+var clientText = 'Jessica, a client is waiting at the door';
+var visitorText = 'Jessica, a visitor is waiting at the entrance.';
+var deliveryText = 'Jessica, a delivery personnel is waiting at the front for a package to be signed.';
+var pickUpText = 'Jessica, a package has been placed outside to be picked up later.'; 
+var maintanenceText = 'Jessica, a maintanence worker is waiting outside the door.';
 
-    var SNS_TOPIC_ARN = Config.amazon_sns.arn.sms;
+// 2. Skill Code =======================================================================================================
 
-    sns.subscribe({
-        Protocol: 'sms',
-        TopicArn: SNS_TOPIC_ARN,
-        Endpoint: +13012213614
-    }, function(error, data) {
-        if (error) {
-            common.log("error when subscribe", error);
-            return func_callback(false);
+// Register and execute handlers
+exports.handler = function(event, context, callback) {
+    var alexa = Alexa.handler(event, context);
+	alexa.APP_ID = APP_ID;
+	alexa.registerHandlers(handlers);
+	alexa.execute();
+}; 
+// Handler function(s)	
+var handlers = {
+	
+	// Launch request will be used when user invokes command
+	'LaunchRequest': function () {
+		this.emit('OpenDoorIntent');
+	},
+	
+	// OpenDoor intent 
+    'OpenDoorIntent': function () {
+		
+		// Welcome message
+		this.emit(':ask', welcomeMsg);
+	
+		var staff = isSlotValid(this.event.request.Guests, "Staff");
+		var visitor = isSlotValid(this.event.request.Guests, "Visitor");
+		var delivery = isSlotValid(this.event.request.Guests, "Delivery personnel");
+		var client = isSlotValid(this.event.request.Guests, "Client");
+		var maintenance = isSlotValid(this.event.request.Guests, "Maintenance");
+		var interview = isSlotValid(this.event.request.Guests, "Interview");
+
+		// If guest is a staff	
+		if (staff) {
+    		this.emit(':tell', visitorMsg);
+			bodyText = staffText; 
+			publish(bodyText);	
+		}
+		
+		// If guest is a visitor
+		else if (visitor) {
+			this.emit(':tell', visitorMsg);
+			bodyText = visitorText;
+			publish(bodyText);	
+		}
+		
+		// If guest is a delivery personnel
+		else if (delivery) {
+			this.emit(':ask', deliveryMsg);
+		}
+
+		// If guest is an interview person
+		else if (interview) {
+			this.emit(':tell', visitorMsg);
+			bodyText = interviewText;
+			publish(bodyText);
+		}
+
+		// If guest is a client
+		else if (client) {
+			this.emit(':tell', visitorMsg);
+			bodyText = clientText;
+			publish(bodyText);
+		}
+
+		// If guest is here for maintanence
+		else if (maintanence) {
+			this.emit(':tell', visitorMsg);
+			bodyText = maintanenceText;
+			publish(bodyText);
+		}
+	},
+
+	'AMAZON.HelpIntent': function () {
+		this.emit('OpenDoorIntent ()');
+	},
+	'AMAZON.StartOverIntent': function () {
+		this.emit ('OpenDoorIntent ()');
+	},
+	'AMAZON.YesIntent': function () {
+		this.emit(':tell', visitorMsg);
+		bodyText = deliveryText;
+		publish(bodyText); 	
+	},
+	'AMAZON.NoIntent': function () {
+		this.emit(':tell', laterOutput);
+		bodyText = pickUpText;
+		publish(bodyText);
+	},
+	'AMAZON.StopIntent': function () {
+		this.emit(':tell', goodbyeMsg);
+	},
+	'AMAZON.CancelIntent': function () {
+		this.emit(':tell', goodbyeMsg);
+	}
+};
+
+
+//    END of Intent Handlers {} ========================================================================================
+// 3. Helper Function(s)  =================================================================================================
+
+//A function to validate slot value
+function isSlotValid(request, slotName) {
+        var slot = request.intent.Guests[slotName];
+        
+        //if we have a slot, get the text and store it into speechOutput
+        if (slot && slot.value) {
+            //we have a value in the slot
+            return true;
         }
+		else {
+            //we didn't get a value in the slot.
+            return false;
+		}
+};
 
+// A function to publish to topic
+// Then send to Jessica via SMS
+function publish(mesg) {
 
-        common.log("subscribe data", data);
-        var SubscriptionArn = data.SubscriptionArn;
+	var params = { 
+		TopicArn: 'arn:aws:sns:us-east-1:236334646492:ReanDoor',
+		Message: mesg,
+		MessageStructure: 'string',
+		//PhoneNumber: '13012213614'
+ 	};
 
-        var params = {
-            TargetArn: SNS_TOPIC_ARN,
-            Message: message,
-            //hardcode now
-            Subject: 'Admin'
-        };
+	var sns = new AWS.SNS();
 
-        sns.publish(params, function(err_publish, data) {
-            if (err_publish) {
-                common.log('Error sending a message', err_publish);
+	sns.publish(params, function(err, data) {
+		
+		if (err) {
+			console.log(err.stack);
+			return;
+		}
 
-            } else {
-                common.log('Sent message:', data.MessageId);
-            }
-
-            var params = {
-                SubscriptionArn: SubscriptionArn
-            };
-
-            sns.unsubscribe(params, function(err, data) {
-                if (err) {
-                    common.log("err when unsubscribe", err);
-                }
-                return func_callback(err_publish != null);
-            });
-        });
-    });
-}
+		else {
+			//process.stdout.write(".");
+			console.log('Push sent');
+			console.log(data);
+		}
+	});
+};
